@@ -1,0 +1,99 @@
+#cloud-config
+autoinstall:
+  version: 1
+  identity:
+    hostname: ubuntu
+    username: UCS-Admin
+    password: "$6$randomsalt$5N/q3TG/ClOaKN1Tbv8EMdE/BVUgGyKTwFh8I.4J5lA1aFd3SBSZT3/fFxuI3UlNn2iK3LfxZyzVUM1kq2j2U/"  # Hashed password for AdminUCS@1265
+  user-data:
+    timezone: America/Toronto
+  packages:
+    - ufw
+    - apparmor
+    - apparmor-utils
+    - preload
+    - flatpak
+    - python3
+    - openjdk-11-jdk
+    - tlp
+  late-commands:
+    # Create a local user with restricted permissions
+    - curtin in-target --target=/target /usr/sbin/useradd -m -s /bin/bash localuser
+    - curtin in-target --target=/target /usr/sbin/chpasswd <<< 'localuser:1265'
+    - curtin in-target --target=/target /usr/sbin/deluser localuser sudo
+
+    # Install additional software
+    - curtin in-target --target=/target bash -c 'apt update && apt install -y software-properties-common'
+    - curtin in-target --target=/target add-apt-repository -y ppa:gnome-terminator
+    - curtin in-target --target=/target bash -c 'apt update && apt install -y google-chrome-stable gnome-session gnome-tweaks wps-office stacer ubuntu-cleaner atom'
+
+    # Set up Flatpak and install GNOME Software plugin for Flatpak
+    - curtin in-target --target=/target bash -c 'flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo'
+    - curtin in-target --target=/target bash -c 'apt install -y gnome-software gnome-software-plugin-flatpak'
+
+    # Configure UFW to block all outgoing traffic except for Scratch
+    - curtin in-target --target=/target /usr/sbin/ufw enable
+    - curtin in-target --target=/target /usr/sbin/ufw default deny outgoing
+    - curtin in-target --target=/target /usr/sbin/ufw allow out to 151.101.194.133 port 80 proto tcp
+    - curtin in-target --target=/target /usr/sbin/ufw allow out to 151.101.194.133 port 443 proto tcp
+    - curtin in-target --target=/target /usr/sbin/ufw allow out to 151.101.66.133 port 80 proto tcp
+    - curtin in-target --target=/target /usr/sbin/ufw allow out to 151.101.66.133 port 443 proto tcp
+    - curtin in-target --target=/target /usr/sbin/ufw allow out to 151.101.130.133 port 80 proto tcp
+    - curtin in-target --target=/target /usr/sbin/ufw allow out to 151.101.130.133 port 443 proto tcp
+    - curtin in-target --target=/target /usr/sbin/ufw allow out to 151.101.2.133 port 80 proto tcp
+    - curtin in-target --target=/target /usr/sbin/ufw allow out to 151.101.2.133 port 443 proto tcp
+
+    # Setup AppArmor profile to restrict software installation for localuser
+    - curtin in-target --target=/target bash -c 'echo "/usr/bin/apt-get {
+        deny /** w,
+        deny /tmp/** rw,
+      }" > /etc/apparmor.d/usr.local.localuser.restrictions'
+    - curtin in-target --target=/target /usr/sbin/apparmor_parser -r /etc/apparmor.d/usr.local.localuser.restrictions
+
+    # Finalize AppArmor setup
+    - curtin in-target --target=/target systemctl restart apparmor
+
+    # Update, upgrade, and restart the system
+    - curtin in-target --target=/target bash -c 'apt update && apt upgrade -y && apt dist-upgrade -y'
+    - curtin in-target --target=/target reboot
+
+storage:
+  layout:
+    name: direct
+  config:
+    - id: disk0
+      type: disk
+      match:
+        size: largest
+      ptable: gpt
+      wipe: superblock-recursive
+      preserve: false
+      name: ''
+      grub_device: true
+    - id: partition0
+      type: partition
+      size: 1G
+      device: disk0
+      flag: boot
+      number: 1
+    - id: partition1
+      type: partition
+      size: -1
+      device: disk0
+      number: 2
+    - id: format0
+      type: format
+      fstype: fat32
+      volume: partition0
+    - id: format1
+      type: format
+      fstype: ext4
+      volume: partition1
+    - id: mount0
+      type: mount
+      device: format0
+      path: /boot/efi
+    - id: mount1
+      type: mount
+      device: format1
+      path: /
