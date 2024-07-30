@@ -4,7 +4,7 @@ autoinstall:
   identity:
     hostname: ubuntu
     username: UCS-Admin
-    password: "$6$randomsalt$5N/q3TG/ClOaKN1Tbv8EMdE/BVUgGyKTwFh8I.4J5lA1aFd3SBSZT3/fFxuI3UlNn2iK3LfxZyzVUM1kq2j2U/"  # Hashed password for AdminUCS@1265
+    password: "$6$OBBVZK4MmtmfC3/H$V5vWGa/NGuwkMJCTTS0cBc4kRH6YqDuHdYjYaUKCSq4PaoKYQBo7uDDQvU4UA5CWRvpe7zxUIGo341lhS5la90"
   packages:
     - ufw
     - apparmor
@@ -15,10 +15,9 @@ autoinstall:
     - openjdk-11-jdk
     - tlp
   late-commands:
-    # Create a local user with restricted permissions
+    # Create a local user with restricted permissions and set hashed password
     - curtin in-target --target=/target /usr/sbin/useradd -m -s /bin/bash localuser
-    - curtin in-target --target=/target /usr/sbin/chpasswd <<< 'localuser:1265'
-    - curtin in-target --target=/target /usr/sbin/deluser localuser sudo
+    - curtin in-target --target=/target bash -c 'echo "localuser:$6$OBBVZK4MmtmfC3/H$cb3z9j5j323E5rsrKusRP.iXdR9USCcLUS8sTilt36aTlwpJbU2qEnmIiuVDojirJy4jGr5yQQBBzdC5sG8Ip1" | chpasswd -e'
 
     # Install additional software
     - curtin in-target --target=/target bash -c 'apt update && apt install -y software-properties-common'
